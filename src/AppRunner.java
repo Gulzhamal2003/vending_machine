@@ -9,7 +9,7 @@ public class AppRunner {
 
     private final UniversalArray<Product> products = new UniversalArrayImpl<>();
 
-    private final CoinAcceptor coinAcceptor;
+    private PaymentReceiver paymentReceiver;
 
     private static boolean isExit = false;
 
@@ -22,7 +22,45 @@ public class AppRunner {
                 new Mars(ActionLetter.F, 80),
                 new Pistachios(ActionLetter.G, 130)
         });
-        coinAcceptor = new CoinAcceptor(100);
+        choosePaymentMethod();
+    }
+
+    private void choosePaymentMethod() {
+        print("Выберите способ оплаты:");
+        print("1 - Монеты");
+        print("2 - Карта");
+
+        String choice = fromConsole();
+        while (choice.trim().isEmpty()) {
+            choice = fromConsole();
+        }
+        if ("1".equals(choice)) {
+            paymentReceiver = new CoinReceiver();
+            print("Вы выбрали оплатить монетами");
+        } else if ("2".equals(choice)) {
+            paymentReceiver = new CardReceiver();
+            CardReceiver cardReceiver = (CardReceiver) paymentReceiver;  // Приводим к типу CardReceiver
+            cardReceiver.authenticateCard();
+            print("Вы выбрали оплатить картой");
+
+            print("Введите сумму пополнения карты:");
+            String amountInput = fromConsole().trim();
+
+            try {
+                int amount = Integer.parseInt(amountInput);
+                if (amount <= 0) {
+                    print("Сумма пополнения должна быть больше нуля");
+                } else {
+                    cardReceiver.addFunds(amount);  // Предполагается, что в CardReceiver есть метод для пополнения баланса
+                    print("Баланс пополнен на " + amount);
+                }
+            } catch (NumberFormatException e) {
+                print("Некорректная сумма. Попробуйте снова.");
+            }
+        } else {
+            print("Неверный выбор. Попробуйте снова.");
+            choosePaymentMethod();
+        }
     }
 
     public static void run() {
@@ -36,7 +74,7 @@ public class AppRunner {
         print("В автомате доступны:");
         showProducts(products);
 
-        print("Монет на сумму: " + coinAcceptor.getAmount());
+        paymentReceiver.displayBalance();
 
         UniversalArray<Product> allowProducts = new UniversalArrayImpl<>();
         allowProducts.addAll(getAllowedProducts().toArray());
@@ -47,7 +85,7 @@ public class AppRunner {
     private UniversalArray<Product> getAllowedProducts() {
         UniversalArray<Product> allowProducts = new UniversalArrayImpl<>();
         for (int i = 0; i < products.size(); i++) {
-            if (coinAcceptor.getAmount() >= products.get(i).getPrice()) {
+            if (paymentReceiver.getBalance() >= products.get(i).getPrice()) {
                 allowProducts.add(products.get(i));
             }
         }
@@ -60,15 +98,21 @@ public class AppRunner {
         print(" h - Выйти");
         String action = fromConsole().substring(0, 1);
         if ("a".equalsIgnoreCase(action)) {
-            coinAcceptor.setAmount(coinAcceptor.getAmount() + 10);
+            paymentReceiver.addFunds(10);
             print("Вы пополнили баланс на 10");
             return;
         }
         try {
             for (int i = 0; i < products.size(); i++) {
-                if (products.get(i).getActionLetter().equals(ActionLetter.valueOf(action.toUpperCase()))) {
-                    coinAcceptor.setAmount(coinAcceptor.getAmount() - products.get(i).getPrice());
-                    print("Вы купили " + products.get(i).getName());
+                Product selectedProduct = products.get(i);
+                if (selectedProduct.getActionLetter().equals(ActionLetter.valueOf(action.toUpperCase()))) {
+
+                    if (paymentReceiver.getBalance() >= selectedProduct.getPrice()) {
+                        paymentReceiver.deduct(selectedProduct.getPrice());  // списываем деньги
+                        print("Вы купили " + selectedProduct.getName());
+                    } else {
+                        print("Недостаточно средств для покупки " + selectedProduct.getName());
+                    }
                     break;
                 }
             }
@@ -80,8 +124,6 @@ public class AppRunner {
                 chooseAction(products);
             }
         }
-
-
     }
 
     private void showActions(UniversalArray<Product> products) {
